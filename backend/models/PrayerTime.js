@@ -78,4 +78,10 @@ const prayerTimeSchema = new mongoose.Schema({
     raw: Object
 }, { timestamps: true });
 
+// TTL index: auto-delete documents older than 90 days
+prayerTimeSchema.index({ date: 1 }, { expireAfterSeconds: 7776000 });
+
+// Compound index: optimize /now and /adhan-wave queries filtering by time + timezone
+prayerTimeSchema.index({ 'timings.Fajr': 1, timezone: 1 });
+
 module.exports = mongoose.model('PrayerTime', prayerTimeSchema);
