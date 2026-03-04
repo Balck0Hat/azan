@@ -2,7 +2,8 @@ var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+var morgan = require('morgan');
+var rateLimit = require('express-rate-limit');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
@@ -13,7 +14,7 @@ var app = express();
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
 
-app.use(logger('dev'));
+app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}));
 app.use(cookieParser());
@@ -22,24 +23,60 @@ app.use(express.static(path.join(__dirname, 'public')));
 // my code
 // const PORT = process.env.PORT || 4000;
 
-
 const mongoose = require('mongoose');
 require('dotenv').config();
 const cors = require('cors');
+const logger = require('./utils/logger');
+const { errorHandler } = require('./middleware/errorHandler');
 const prayertimesRoutes = require('./routes/prayertimes');
+const healthRoutes = require('./routes/health');
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/azan';
-app.use(cors());
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production'
+    ? ['https://azanlive.com', 'https://www.azanlive.com']
+    : '*',
+  methods: ['GET', 'POST'],
+  credentials: true
+};
+app.use(cors(corsOptions));
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 100, // 100 طلب لكل IP
+  message: { message: 'طلبات كثيرة، حاول لاحقاً' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', apiLimiter);
+
+// Trust proxy for rate limiting behind nginx
+app.set('trust proxy', 1);
+
 app.use('/api/prayertimes', prayertimesRoutes);
+app.use('/api/prayertimes', healthRoutes);
+
+// Admin routes (no rate limiting)
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
+
+// Dev-only UX audit routes (no rate limiting)
+if (process.env.NODE_ENV !== 'production') {
+  const uxAuditRoutes = require('./routes/uxAudit');
+  app.use('/api', uxAuditRoutes);
+}
+
+// API Error Handler
+app.use('/api', errorHandler);
 
 mongoose.connect(MONGODB_URI)
     .then(() => {
-        console.log('✅ Connected to MongoDB');
-        // app.listen(PORT, () => {
-        //     console.log(`🚀 Server listening on http://localhost:${PORT}`);
-        // });
+        logger.info('Connected to MongoDB');
     })
     .catch((err) => {
-        console.error('❌ MongoDB connection error', err);
+        logger.error('MongoDB connection error', err);
     });
 
 
