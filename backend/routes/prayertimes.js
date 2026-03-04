@@ -8,6 +8,13 @@ const getClientLocation = require("../utils/getClientLocation");
 const calcNextPrayer = require("../utils/calcNextPrayer");
 const worldWave = require("../utils/worldWave");
 
+const {
+    todaySchema,
+    nowSchema,
+    nextForMeSchema,
+    validateQuery,
+} = require('../validators/prayerTimesValidator');
+
 // helper للفورمات تبع تاريخ اليوم UTC
 function getDayRangeLocal(date) {
     const y = date.getFullYear();   // محلي (نفس وقت السيرفر)
@@ -60,7 +67,7 @@ function utcStringToLocal(str, baseDate, timeZone) {
 // ================== GET /api/prayertimes/today ==================
 // مثال: /api/prayertimes/today?city=Amman
 // أو  /api/prayertimes/today?city=Amman&date=2025-11-22
-router.get('/today', async (req, res) => {
+router.get('/today', validateQuery(todaySchema), async (req, res) => {
     try {
         const {city, date} = req.query;
 
@@ -84,16 +91,19 @@ router.get('/today', async (req, res) => {
             ({start, end} = getDayRangeLocal(now));
         }
 
+        // Escape regex special chars in city name
+        const escaped = city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
         // أولاً نحاول اسم مطابق تماماً (case insensitive)
         let doc = await PrayerTime.findOne({
-            cityName: new RegExp(`^${city}$`, 'i'),
+            cityName: new RegExp(`^${escaped}$`, 'i'),
             date: {$gte: start, $lt: end}
         });
 
         // لو ما لقينا، نعمل contains search بسيط
         if (!doc) {
             doc = await PrayerTime.findOne({
-                cityName: new RegExp(city, 'i'),
+                cityName: new RegExp(escaped, 'i'),
                 date: {$gte: start, $lt: end}
             });
         }
@@ -123,7 +133,7 @@ router.get('/today', async (req, res) => {
 
 // ================== GET /api/prayertimes/now ==================
 // مثال: /api/prayertimes/now?prayer=Maghrib
-router.get('/now', async (req, res) => {
+router.get('/now', validateQuery(nowSchema), async (req, res) => {
     try {
         let {prayer} = req.query;
         const allowed = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
@@ -352,7 +362,7 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 // ================== GET /api/prayertimes/next-for-me ==================
-router.get("/next-for-me", async (req, res) => {
+router.get("/next-for-me", validateQuery(nextForMeSchema), async (req, res) => {
     try {
         // ------------ 1) نجيب IP المستخدم ------------
         let ip =
