@@ -26,6 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const mongoose = require('mongoose');
 require('dotenv').config();
 const cors = require('cors');
+const helmet = require('helmet');
 const logger = require('./utils/logger');
 const { errorHandler } = require('./middleware/errorHandler');
 const prayertimesRoutes = require('./routes/prayertimes');
@@ -41,6 +42,22 @@ const corsOptions = {
   credentials: true
 };
 app.use(cors(corsOptions));
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "https://api.aladhan.com"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"],
+    },
+  },
+}));
 
 // Rate limiting
 const apiLimiter = rateLimit({
