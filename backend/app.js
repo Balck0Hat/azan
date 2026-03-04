@@ -75,6 +75,10 @@ app.set('trust proxy', 1);
 app.use('/api/prayertimes', prayertimesRoutes);
 app.use('/api/prayertimes', healthRoutes);
 
+// Sitemap (no rate limiting, served at root)
+const sitemapRoutes = require('./routes/sitemap');
+app.use('/', sitemapRoutes);
+
 // Admin routes (no rate limiting)
 const adminRoutes = require('./routes/admin');
 app.use('/api/admin', adminRoutes);
