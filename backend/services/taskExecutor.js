@@ -1,7 +1,10 @@
 const Task = require('../models/Task');
+const { execFileSync } = require('child_process');
 const { runClaudeWithTools } = require('../utils/claudeRunner');
 const { commitChanges, rollback, hasChanges } = require('../utils/gitSafety');
 const logger = require('../utils/logger');
+
+const FRONTEND_CATS = ['frontend', 'ux', 'accessibility', 'seo'];
 
 const EXECUTE_PROMPT = (task) => `You are working on the Azan project at /root/azan.
 This is a MERN stack prayer times website (React 19 frontend, Express backend, MongoDB).
@@ -24,6 +27,21 @@ Instructions:
 
 Complete the task now.`;
 
+// Rebuild frontend if task touched frontend files
+function rebuildFrontend() {
+  try {
+    logger.info('Rebuilding frontend...');
+    execFileSync('npm', ['run', 'build'], {
+      cwd: '/root/azan/frontend', timeout: 120000
+    });
+    logger.info('Frontend rebuild complete');
+    return true;
+  } catch (err) {
+    logger.error(`Frontend build failed: ${err.message}`);
+    return false;
+  }
+}
+
 async function executeTask(task, emitEvent) {
   logger.info(`Executing task: ${task.title} [${task._id}]`);
 
@@ -36,6 +54,16 @@ async function executeTask(task, emitEvent) {
 
   try {
     const output = await runClaudeWithTools(EXECUTE_PROMPT(task), undefined, 300000);
+
+    // Auto-rebuild frontend if task likely touched frontend files
+    if (FRONTEND_CATS.includes(task.category)) {
+      const built = rebuildFrontend();
+      if (!built) {
+        // Build failed = task broke something → rollback
+        rollback();
+        throw new Error('Frontend build failed after task changes');
+      }
+    }
 
     // SUCCESS — commit so changes are safe from future rollbacks
     commitChanges(`auto-task: ${task.title}`);
@@ -50,9 +78,8 @@ async function executeTask(task, emitEvent) {
     emitEvent('task:update', task.toObject());
     return true;
   } catch (err) {
-    // FAILURE — rollback modified tracked files only (safe)
     if (hasChanges()) {
-      logger.warn(`Task failed with changes — rolling back modified files`);
+      logger.warn(`Task failed with changes — rolling back`);
       rollback();
     }
 
