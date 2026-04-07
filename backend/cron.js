@@ -1,7 +1,7 @@
 // cron.js
 // ملف خاص للكرون جوب بدون ما نخرب app.js
 
-const computePrayerData = require("./computeTodayLocal");
+const cronService = require("./services/cronService");
 
 // دالة تعمل سكيجول مرة يومياً
 function scheduleDailyJob(hour = 3, minute = 5) {
@@ -18,18 +18,24 @@ function scheduleDailyJob(hour = 3, minute = 5) {
     }
 
     const initialDelay = firstRun.getTime() - now.getTime();
+    cronService.setNextRun(firstRun);
 
     console.log("⏰ First scheduled compute at:", firstRun.toString());
 
     // تشغيل أول مرة
     setTimeout(() => {
         console.log("🚀 Running computeTodayLocal_fast (first run)...");
-        computePrayerData().catch(console.error);
+        cronService.runAndRecord().catch(console.error);
 
         // بعدها كل 24 ساعة
         setInterval(() => {
+            const nextRun = new Date();
+            nextRun.setDate(nextRun.getDate() + 1);
+            nextRun.setHours(hour, minute, 0, 0);
+            cronService.setNextRun(nextRun);
+
             console.log("🚀 Running computeTodayLocal_fast (interval)...");
-            computePrayerData().catch(console.error);
+            cronService.runAndRecord().catch(console.error);
         }, 24 * 60 * 60 * 1000);
 
     }, initialDelay);

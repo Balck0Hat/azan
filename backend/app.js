@@ -38,7 +38,7 @@ const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
     ? ['https://azanlive.com', 'https://www.azanlive.com']
     : '*',
-  methods: ['GET', 'POST', 'PUT'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 };
 app.use(cors(corsOptions));
@@ -72,9 +72,11 @@ app.use('/api/', apiLimiter);
 // Trust proxy for rate limiting behind nginx
 app.set('trust proxy', 1);
 
-// Analytics middleware (before routes, skips admin/health/bots)
+// Tracking middleware (before routes)
 const analyticsMiddleware = require('./middleware/analytics');
+const apiMetricsMiddleware = require('./middleware/apiMetrics');
 app.use('/api', analyticsMiddleware);
+app.use('/api', apiMetricsMiddleware);
 
 app.use('/api/prayertimes', prayertimesRoutes);
 app.use('/api/prayertimes', healthRoutes);
@@ -98,6 +100,12 @@ app.use('/api/admin/analytics', adminAnalyticsRoutes);
 const adminSettingsRoutes = require('./routes/adminSettings');
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/settings', adminSettingsRoutes);
+
+app.use('/api/admin/cron', require('./routes/adminCron'));
+app.use('/api/admin/feedback', require('./routes/adminFeedback'));
+app.use('/api/admin/performance', require('./routes/adminPerformance'));
+app.use('/api/admin/logs', require('./routes/adminLogs'));
+app.use('/api/feedback', require('./routes/feedback'));
 
 // Dev-only UX audit routes (no rate limiting)
 if (process.env.NODE_ENV !== 'production') {
